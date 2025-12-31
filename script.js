@@ -1,141 +1,242 @@
-let countdownInterval;
+// Constants
+const SECONDS_PER_MINUTE = 60;
+const SECONDS_PER_HOUR = 3600;
+const SECONDS_PER_DAY = 86400;
 
+// State
+let countdownInterval = null;
+let fireworksInstance = null;
+
+// DOM Elements Cache
+const elements = {
+    countdownContainer: null,
+    countdownHeading: null,
+    timer: null,
+    days: null,
+    hours: null,
+    minutes: null,
+    seconds: null,
+    daysLabel: null,
+    hoursLabel: null,
+    minutesLabel: null,
+    secondsLabel: null,
+    startButton: null,
+    celebrateButton: null,
+    disclaimerMessage: null,
+    fireworksContainer: null,
+    fireworksSound: null
+};
+
+// Initialize DOM elements cache
+const initializeElements = () => {
+    elements.countdownContainer = document.getElementById('countdownContainer');
+    elements.countdownHeading = document.getElementById('countdownHeading');
+    elements.timer = document.getElementById('timer');
+    elements.days = document.getElementById('days');
+    elements.hours = document.getElementById('hours');
+    elements.minutes = document.getElementById('minutes');
+    elements.seconds = document.getElementById('seconds');
+    elements.daysLabel = document.getElementById('days-label');
+    elements.hoursLabel = document.getElementById('hours-label');
+    elements.minutesLabel = document.getElementById('minutes-label');
+    elements.secondsLabel = document.getElementById('seconds-label');
+    elements.startButton = document.getElementById('startButton');
+    elements.celebrateButton = document.getElementById('celebrateNowButton');
+    elements.disclaimerMessage = document.getElementById('disclaimerMessage');
+    elements.fireworksContainer = document.getElementById('fireworks');
+    elements.fireworksSound = document.getElementById('fireworksSound');
+};
+
+// URL parameter helpers
 const getYearFromUrl = () => {
     const urlParams = new URLSearchParams(window.location.search);
     const year = urlParams.get('year');
     return year ? parseInt(year, 10) : new Date().getFullYear() + 1;
 };
 
-const getMusicFromUrl = () => {
-    const defaultMusicUrl = 'https://open.spotify.com/embed/playlist/5xAAZCzx1MEAGsaf2hWbXD?utm_source=generator&theme=0';
-    const urlParams = new URLSearchParams(window.location.search);
-    return urlParams.get('music') || defaultMusicUrl;
-};
-
+// UI Update functions
 const updateHeading = (year) => {
-    const headingElement = document.getElementById('countdownHeading');
-    headingElement.innerText = `Countdown to New Year ${year}`;
-};
-
-const updateSpotifyPlayer = (musicUrl) => {
-    const spotifyPlayer = document.getElementById('spotifyPlayer');
-    spotifyPlayer.src = musicUrl;
-};
-
-const updateCountdownDisplay = (textDay, textHour, textMinute, textSecond) => {
-    const daysElement = document.getElementById('days');
-    const hoursElement = document.getElementById('hours');
-    const minutesElement = document.getElementById('minutes');
-    const secondsElement = document.getElementById('seconds');
-    const daysLabel = document.getElementById('days-label');
-    const hoursLabel = document.getElementById('hours-label');
-    const minutesLabel = document.getElementById('minutes-label');
-    const secondsLabel = document.getElementById('seconds-label');
-
-    if (textDay > 0) {
-        daysElement.innerText = textDay;
-        daysElement.style.display = 'inline';
-        daysLabel.style.display = 'inline';
-    } else {
-        daysElement.style.display = 'none';
-        daysLabel.style.display = 'none';
-    }
-
-    if (textHour > 0 || textDay > 0) {
-        hoursElement.innerText = textHour;
-        hoursElement.style.display = 'inline';
-        hoursLabel.style.display = 'inline';
-    } else {
-        hoursElement.style.display = 'none';
-        hoursLabel.style.display = 'none';
-    }
-
-    if (textMinute > 0 || textHour > 0 || textDay > 0) {
-        minutesElement.innerText = textMinute;
-        minutesElement.style.display = 'inline';
-        minutesLabel.style.display = 'inline';
-    } else {
-        minutesElement.style.display = 'none';
-        minutesLabel.style.display = 'none';
-    }
-
-    secondsElement.innerText = textSecond;
-
-    if (textDay === 0 && textHour === 0 && textMinute === 0) {
-        secondsLabel.style.display = 'none';
-    } else {
-        secondsLabel.style.display = 'inline';
+    if (elements.countdownHeading) {
+        elements.countdownHeading.textContent = `Countdown to New Year ${year}`;
     }
 };
 
+const toggleElementDisplay = (element, label, show) => {
+    if (element && label) {
+        const parentTimeUnit = element.closest('.time-unit');
+        if (parentTimeUnit) {
+            parentTimeUnit.style.display = show ? 'flex' : 'none';
+        }
+        if (show) {
+            element.textContent = element.textContent || '0';
+        }
+    }
+};
+
+const updateCountdownDisplay = (days, hours, minutes, seconds) => {
+    const showDays = days > 0;
+    const showHours = hours > 0 || showDays;
+    const showMinutes = minutes > 0 || showHours;
+
+    elements.days.textContent = days;
+    toggleElementDisplay(elements.days, elements.daysLabel, showDays);
+
+    elements.hours.textContent = hours;
+    toggleElementDisplay(elements.hours, elements.hoursLabel, showHours);
+
+    elements.minutes.textContent = minutes;
+    toggleElementDisplay(elements.minutes, elements.minutesLabel, showMinutes);
+
+    elements.seconds.textContent = seconds;
+    toggleElementDisplay(elements.seconds, elements.secondsLabel, true);
+};
+
+const hideStartControls = () => {
+    elements.startButton?.classList.add('hidden');
+    elements.celebrateButton?.classList.add('hidden');
+    if (elements.disclaimerMessage) {
+        elements.disclaimerMessage.style.display = 'none';
+    }
+};
+
+// Countdown logic
 const countdown = () => {
     const year = getYearFromUrl();
     updateHeading(year);
+    
     const countDate = new Date(`Jan 1, ${year} 00:00:00`).getTime();
-    const now = new Date().getTime();
-    const gap = countDate - now;
-
-    const totalSeconds = Math.floor(gap / 1000);
+    const now = Date.now();
+    const totalSeconds = Math.floor((countDate - now) / 1000);
 
     if (totalSeconds <= 0) {
         clearInterval(countdownInterval);
-        document.getElementById('timer').innerText = "Happy New Year!";
-        document.getElementById('countdownHeading').innerText = "";
+        countdownInterval = null;
+        elements.countdownContainer?.classList.add('hidden');
+        document.getElementById('celebration')?.classList.remove('hidden');
         startFireworks();
         return;
     }
 
-    const second = 1;
-    const minute = second * 60;
-    const hour = minute * 60;
-    const day = hour * 24;
+    const days = Math.floor(totalSeconds / SECONDS_PER_DAY);
+    const hours = Math.floor((totalSeconds % SECONDS_PER_DAY) / SECONDS_PER_HOUR);
+    const minutes = Math.floor((totalSeconds % SECONDS_PER_HOUR) / SECONDS_PER_MINUTE);
+    const seconds = totalSeconds % SECONDS_PER_MINUTE;
 
-    const textDay = Math.floor(totalSeconds / day);
-    const textHour = Math.floor((totalSeconds % day) / hour);
-    const textMinute = Math.floor((totalSeconds % hour) / minute);
-    const textSecond = Math.floor((totalSeconds % minute) / second);
-
-    updateCountdownDisplay(textDay, textHour, textMinute, textSecond);
+    updateCountdownDisplay(days, hours, minutes, seconds);
 };
 
+// Spectacular fireworks celebration
 const startFireworks = () => {
-    const container = document.getElementById('fireworks');
-    const fireworks = new Fireworks.default(container); // Use Fireworks.default if using ES module
-    const fireworksSound = document.getElementById('fireworksSound');
-    fireworksSound.loop = true; // Ensure the sound loops
-    fireworksSound.play();
-    fireworks.start();
+    // Enhance buildings with glow effect
+    const skyline = document.querySelector('.city-skyline');
+    if (skyline) {
+        skyline.style.transition = 'filter 1s ease';
+        skyline.style.filter = 'brightness(1.3) drop-shadow(0 0 15px rgba(255, 255, 255, 0.4))';
+    }
+
+    // Start fireworks with maximum spectacle
+    if (fireworksInstance) return;
+
+    fireworksInstance = new Fireworks.default(elements.fireworksContainer, {
+        acceleration: 1.05,
+        friction: 0.95,
+        gravity: 1.2,
+        particles: 150,
+        traceLength: 5,
+        traceSpeed: 18,
+        explosion: 10,
+        intensity: 50,
+        flickering: 70,
+        lineStyle: 'round',
+        hue: {
+            min: 0,
+            max: 360
+        },
+        delay: {
+            min: 15,
+            max: 35
+        },
+        rocketsPoint: {
+            min: 50,
+            max: 50
+        },
+        lineWidth: {
+            explosion: {
+                min: 2,
+                max: 7
+            },
+            trace: {
+                min: 1,
+                max: 4
+            }
+        },
+        brightness: {
+            min: 70,
+            max: 95
+        },
+        decay: {
+            min: 0.008,
+            max: 0.02
+        },
+        mouse: {
+            click: true,
+            move: false,
+            max: 5
+        }
+    });
+
+    // Start celebration audio
+    if (elements.fireworksSound) {
+        elements.fireworksSound.loop = true;
+        elements.fireworksSound.play().catch(err => console.log('Audio autoplay prevented:', err));
+    }
+
+    fireworksInstance.start();
+    elements.fireworksContainer.classList.add('active');
+    elements.fireworksContainer.style.filter = 'brightness(1.3) contrast(1.2) saturate(1.4)';
+    elements.fireworksContainer.style.mixBlendMode = 'screen';
 };
 
 const startCountdown = () => {
-    document.getElementById('countdownContainer').classList.remove('hidden');
+    document.getElementById('welcomeScreen')?.classList.add('hidden');
+    elements.countdownContainer?.classList.remove('hidden');
     countdown();
     countdownInterval = setInterval(countdown, 1000);
 };
 
 const celebrateNow = () => {
-    document.getElementById('startButton').classList.add('hidden');
-    document.getElementById('celebrateNowButton').classList.add('hidden');
-    document.getElementById('disclaimerMessage').style.display = 'none';
-
-    document.getElementById('countdownContainer').classList.remove('hidden');
-
-    clearInterval(countdownInterval);
-    document.getElementById('timer').innerText = "Happy New Year!";
+    hideStartControls();
+    document.getElementById('welcomeScreen')?.classList.add('hidden');
     
-    document.getElementById('countdownHeading').innerText = "";
+    if (countdownInterval) {
+        clearInterval(countdownInterval);
+        countdownInterval = null;
+    }
+    
+    elements.countdownContainer?.classList.add('hidden');
+    document.getElementById('celebration')?.classList.remove('hidden');
     startFireworks();
 };
 
-document.getElementById('startButton').addEventListener('click', () => {
-    document.getElementById('startButton').classList.add('hidden');
-    document.getElementById('celebrateNowButton').classList.add('hidden');
-    document.getElementById('disclaimerMessage').style.display = 'none';
-    startCountdown();
-});
+// Event Listeners
+const setupEventListeners = () => {
+    elements.startButton?.addEventListener('click', () => {
+        hideStartControls();
+        startCountdown();
+    });
 
-document.getElementById('celebrateNowButton').addEventListener('click', celebrateNow);
+    elements.celebrateButton?.addEventListener('click', celebrateNow);
+};
 
-// Set the Spotify player source dynamically
-const musicUrl = getMusicFromUrl();
-updateSpotifyPlayer(musicUrl);
+// Initialize app
+const init = () => {
+    initializeElements();
+    setupEventListeners();
+};
+
+// Start the app when DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+} else {
+    init();
+}
